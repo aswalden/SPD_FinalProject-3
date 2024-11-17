@@ -1,4 +1,3 @@
-# app.py
 import os
 import sqlite3
 import atexit
@@ -15,11 +14,11 @@ from database import (
     create_space, get_all_spaces, get_space_by_id, create_event, get_all_events, get_event_by_id,
     get_db, get_resources_by_user, get_events_by_user, get_spaces_by_user, book_resource, book_event,
     book_space, get_event_bookings_by_user, get_resource_bookings_by_user, get_space_bookings_by_user,
-    check_upcoming_bookings, send_system_message, check_upcoming_bookings, get_top_users
-
+    check_upcoming_bookings, send_system_message, check_upcoming_bookings, get_top_users, update_user_rating
 )
 
 def schedule_notifications(app):
+    """Schedules periodic notifications for upcoming bookings."""
     with app.app_context():
         print(f"Running check_upcoming_bookings at {datetime.now()}")
         try:
@@ -59,21 +58,23 @@ else:
 
 @app.before_request
 def initialize_database():
+    """Initialize database connection before handling a request."""
     init_db()
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
+    """Close the database connection after a request is completed."""
     close_db()
 
+# Root routes for the homepage
 @app.route('/')
 @app.route('/index')
 def index():
-    # Fetch data for the home page
+    """Renders the homepage with recent resources, top reviews, and top users."""
     recent_resources = get_recent_resources()
     top_reviews = get_top_reviews()
     top_users = get_top_users()  # Fetch top-rated users from the database
     
-    # Render the index template with the fetched data
     return render_template(
         'index.html',
         recent_resources=recent_resources,
@@ -81,13 +82,16 @@ def index():
         top_users=top_users
     )
 
-
+# Route for user registration page
 @app.route('/registration')
 def registration():
+    """Displays the registration form."""
     return render_template('register.html')
 
+# Route to handle user registration logic
 @app.route('/register', methods=['POST'])
 def register():
+    """Registers a new user and handles profile image upload."""
     name = request.form['name']
     email = request.form['email']
     password = request.form['password']
@@ -98,7 +102,6 @@ def register():
         flash('Name, email, and password are required', 'error')
         return redirect(url_for('registration'))
 
-    # Handle profile image upload
     profile_image_path = None
     if profile_image and allowed_file(profile_image.filename):
         filename = secure_filename(profile_image.filename)
@@ -108,7 +111,6 @@ def register():
         flash('Invalid file type. Only PNG, JPG, and JPEG files are allowed.', 'error')
         return redirect(url_for('registration'))
 
-    # Store user in the database
     user = create_user(name, email, password, location, profile_image_path)
     if user is None:
         flash('Email already registered', 'error')
@@ -117,8 +119,10 @@ def register():
     flash('Registration successful', 'success')
     return redirect(url_for('login'))
 
+# Route for user login page and authentication
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """Handles user login and session management."""
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
@@ -138,26 +142,24 @@ def login():
 
     return render_template('login.html')
 
+# Route for displaying the user profile
 @app.route('/profile')
 def profile():
-    # Ensure user is logged in
+    """Fetches user-specific data and bookings, and displays the profile page."""
     user_id = session.get('user_id')
     if user_id is None:
         flash('Please log in to access your profile', 'error')
         return redirect(url_for('login'))
 
-    # Fetch user information
     user = get_user_by_id(user_id)
     if not user:
         flash('User not found', 'error')
         return redirect(url_for('login'))
 
-    # Fetch user-specific data
     resources = get_resources_by_user(user_id)
     events = get_events_by_user(user_id)
     spaces = get_spaces_by_user(user_id)
 
-    # Fetch bookings made by the user
     resource_bookings = get_resource_bookings_by_user(user_id)
     space_bookings = get_space_bookings_by_user(user_id)
     event_bookings = get_event_bookings_by_user(user_id)
@@ -173,9 +175,10 @@ def profile():
         event_bookings=event_bookings
     )
 
-
+# Route to log out the user
 @app.route('/logout')
 def logout():
+    """Clears the user session and redirects to the login page."""
     session.pop('user_id', None)
     flash('Logged out successfully', 'success')
     return redirect(url_for('login'))
@@ -183,6 +186,7 @@ def logout():
 # Resource Routes
 @app.route('/resource/new', methods=['GET', 'POST'])
 def new_resource():
+    """Allows a logged-in user to create a new resource."""
     user_id = session.get('user_id')
     if not user_id:
         flash("Please log in to add a resource.", "error")
@@ -195,19 +199,16 @@ def new_resource():
         availability = request.form.get('availability')
         image = request.files.get('image')
 
-        # Validate required fields
         if not title or not category or not availability:
             flash('All fields are required.', 'error')
             return redirect(url_for('new_resource'))
 
-        # Validate date format (YYYY-MM-DD)
         try:
             datetime.strptime(availability, '%Y-%m-%d')
         except ValueError:
             flash('Invalid date format. Please use YYYY-MM-DD.', 'error')
             return redirect(url_for('new_resource'))
 
-        # Validate and save the image
         images = None
         if image and allowed_file(image.filename):
             filename = secure_filename(image.filename)
@@ -218,7 +219,6 @@ def new_resource():
             return redirect(url_for('new_resource'))
 
         try:
-            # Save the resource in the database (pass images if needed)
             create_resource(user_id, title, description, category, availability, images)
             flash('Resource added successfully!', 'success')
             return redirect(url_for('list_resources'))
@@ -939,6 +939,38 @@ def view_user_profile(user_id):
         page_title=f"{user['name']}'s Profile"
     )
 
+@app.route('/rate_user/<int:user_id>', methods=['POST'])
+def rate_user(user_id):
+    """
+    Handle rating submission for a user.
+    """
+    if 'user_id' not in session:
+        flash("You need to log in to rate a user.", "error")
+        return redirect(url_for('login'))
+
+    rating = request.form.get('rating', type=int)
+    comment = request.form.get('comment', type=str).strip()
+    reviewer_id = session['user_id']
+
+    if not rating or not comment:
+        flash("Both rating and comment are required.", "error")
+        return redirect(url_for('view_user_profile', user_id=user_id))
+
+    db = get_db()
+    db.execute(
+        """
+        INSERT INTO reviews (user_id, reviewer_id, rating, comment, timestamp)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        """,
+        (user_id, reviewer_id, rating, comment)
+    )
+    db.commit()
+
+    # Update the user's average rating
+    update_user_rating(user_id)
+
+    flash("Your rating has been submitted.", "success")
+    return redirect(url_for('view_user_profile', user_id=user_id))
 
 
 if __name__ == '__main__':

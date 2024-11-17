@@ -30,6 +30,7 @@ def init_db():
             password TEXT NOT NULL,
             location TEXT,
             profile_image TEXT
+            rating REAL DEFAULT 0.0
         );
 
         CREATE TABLE IF NOT EXISTS resources (
@@ -469,3 +470,28 @@ def get_top_users(limit=5):
         """,
         (limit,)
     ).fetchall()
+
+def update_user_rating(user_id):
+    """
+    Recalculate and update the average rating for a user based on their reviews.
+    """
+    db = get_db()
+    avg_rating = db.execute(
+        """
+        SELECT AVG(rating) AS avg_rating
+        FROM reviews
+        WHERE user_id = ?
+        """,
+        (user_id,)
+    ).fetchone()['avg_rating']
+
+    avg_rating = avg_rating if avg_rating is not None else 0.0  # Default to 0.0 if no reviews
+    db.execute(
+        """
+        UPDATE users
+        SET rating = ?
+        WHERE id = ?
+        """,
+        (avg_rating, user_id)
+    )
+    db.commit()
