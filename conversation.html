@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Conversation with {{ receiver.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4 text-center">Conversation with {{ receiver.name }}</h2>
+
+    <div class="messages mb-4">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="d-flex mb-3 {% if message.sender_id == session.user_id %}justify-content-end{% else %}justify-content-start{% endif %}">
+                    <div class="card {% if message.sender_id == session.user_id %}bg-primary text-white{% else %}bg-light{% endif %}" style="max-width: 70%;">
+                        <div class="card-body">
+                            <p class="mb-1"><strong>{{ message.sender_name }}:</strong> {{ message.content }}</p>
+                            <p class="mb-0 text-end text-muted small">{{ message.timestamp }}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-muted text-center">No messages in this conversation yet.</p>
+        {% endif %}
+    </div>
+
+    <form action="{{ url_for('send_message_route', receiver_id=receiver.id) }}" method="POST" class="needs-validation" novalidate>
+        <div class="mb-3">
+            <label for="content" class="form-label">New Message</label>
+            <textarea id="content" name="content" class="form-control" rows="3" required></textarea>
+            <div class="invalid-feedback">
+                Please enter a message.
+            </div>
+        </div>
+        <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary">Send</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

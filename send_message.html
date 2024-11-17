@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Send Message{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4 text-center">Send Message to {{ receiver['name'] }}</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="alert alert-dismissible fade show" role="alert">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <form action="{{ url_for('send_message_route', receiver_id=receiver['id']) }}" method="POST" class="needs-validation" novalidate>
+        <div class="mb-3">
+            <label for="content" class="form-label">Message</label>
+            <textarea id="content" name="content" class="form-control" rows="5" required></textarea>
+            <div class="invalid-feedback">
+                Please enter your message.
+            </div>
+        </div>
+        <div class="d-flex justify-content-between">
+            <a href="{{ url_for('inbox') }}" class="btn btn-secondary">Back to Inbox</a>
+            <button type="submit" class="btn btn-primary">Send</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.querySelector(".needs-validation");
+    form.addEventListener("submit", (event) => {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        form.classList.add("was-validated");
+    });
+});
+</script>
+{% endblock %}
